@@ -1,0 +1,96 @@
+version: '3'
+services:
+  zookeeper:
+    container_name: kafka-cluster-zookeeper
+    image: confluentinc/cp-zookeeper:7.0.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    restart: always
+    ports:
+      - "2181:2181"
+    networks:
+      - kafka-network
+  kafka1:
+    restart: always
+    container_name: kafka-cluster-broker-app-1
+    image: confluentinc/cp-kafka:7.0.1
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,EXTERNAL://kafka1:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "29092:29092"
+    networks:
+      - kafka-network
+
+  # Интерфейс управления Kafka (Kafka UI)
+  ui:
+    image: provectuslabs/kafka-ui:v0.7.0
+    restart: always
+    ports:
+      - "127.0.0.1:8080:8080"                           # Интерфейс доступен на localhost:8080
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: kafka1:9092 # Указываем, где искать брокер Kafka
+      KAFKA_CLUSTERS_0_NAME: kafka-zookeeper                     # Название кластера в UI
+    networks:
+      - kafka-network
+
+  # База данных PostgreSQL (источник данных)
+  postgres:
+    image: debezium/postgres:16
+    hostname: postgres
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres-user                     # Имя пользователя
+      POSTGRES_PASSWORD: postgres-pw                   # Пароль
+      POSTGRES_DB: orders                           # Название базы данных
+    networks:
+      - kafka-network
+  kafka-connect:
+    build:
+      context: ./kafka-connect
+    ports:
+      - "8083:8083"  # REST API Kafka Connect
+      - "9875:9875"
+      - "9876:9876"
+    depends_on:
+      - kafka1
+      - postgres
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka1:9092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: 'kafka-connect'
+      CONNECT_REST_ADVERTISED_HOST_NAME: 'localhost'
+
+      # Хранение конфигурации, смещений и статусов
+      CONNECT_CONFIG_STORAGE_TOPIC: 'connect-config-storage'
+      CONNECT_OFFSET_STORAGE_TOPIC: 'connect-offset-storage'
+      CONNECT_STATUS_STORAGE_TOPIC: 'connect-status-storage'
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+
+      # Конвертеры
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+
+      # Пути к плагинам
+      CONNECT_PLUGIN_PATH: /usr/share/java,/etc/kafka-connect/jars
+    volumes:
+      - ./confluent-hub-components/:/etc/kafka-connect/jars
+    networks:
+      - kafka-network
+
+networks:
+  kafka-network:
