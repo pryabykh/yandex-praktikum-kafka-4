@@ -1,0 +1,22 @@
+{
+  "name": "pg-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres-user",
+    "database.password": "postgres-pw",
+    "database.dbname": "orders",
+    "database.server.name": "orders",
+    "table.include.list": "public.orders,public.users",
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "false",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "topic.prefix": "orders",
+    "topic.creation.enable": "true",
+    "topic.creation.default.replication.factor": "-1",
+    "topic.creation.default.partitions": "-1",
+    "skipped.operations": "none"
+  }
+}

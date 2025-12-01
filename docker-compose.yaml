@@ -50,11 +50,15 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: postgres-user                     # Имя пользователя
-      POSTGRES_PASSWORD: postgres-pw                   # Пароль
-      POSTGRES_DB: orders                           # Название базы данных
+      POSTGRES_USER: postgres-user
+      POSTGRES_PASSWORD: postgres-pw
+      POSTGRES_DB: orders
+    volumes:
+      - ./postgres/custom-config.conf:/etc/postgresql/postgresql.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     networks:
       - kafka-network
+
   kafka-connect:
     build:
       context: ./kafka-connect
