@@ -30,6 +30,18 @@ services:
     networks:
       - kafka-network
 
+  schema-registry:
+    image: bitnamilegacy/schema-registry:7.6
+    ports:
+      - '8081:8081'
+    depends_on:
+      - kafka1
+    environment:
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKA_BROKERS: PLAINTEXT://kafka1:9092
+    networks:
+      - kafka-network
+
   # Интерфейс управления Kafka (Kafka UI)
   ui:
     image: provectuslabs/kafka-ui:v0.7.0
@@ -69,6 +81,7 @@ services:
     depends_on:
       - kafka1
       - postgres
+      - schema-registry
     environment:
       CONNECT_BOOTSTRAP_SERVERS: kafka1:9092
       CONNECT_REST_PORT: 8083
@@ -84,15 +97,45 @@ services:
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
 
       # Конвертеры
-      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_KEY_CONVERTER: "io.confluent.connect.avro.AvroConverter"
+      CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
       CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'http://schema-registry:8081/'
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL:  'http://schema-registry:8081/'
+
+      # Export JMX metrics to :9876/metrics for Prometheus
+      KAFKA_JMX_PORT: '9875'
+      KAFKA_OPTS: "-javaagent:/opt/jmx_prometheus_javaagent-0.15.0.jar=9876:/opt/kafka-connect.yml"
+      # Read connection password from file
+      CONNECT_CONFIG_PROVIDERS: "file"
+      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: "org.apache.kafka.common.config.provider.FileConfigProvider"
 
       # Пути к плагинам
       CONNECT_PLUGIN_PATH: /usr/share/java,/etc/kafka-connect/jars
     volumes:
       - ./confluent-hub-components/:/etc/kafka-connect/jars
+    networks:
+      - kafka-network
+
+  prometheus:
+    image: prom/prometheus:v2.30.3
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus:/etc/prometheus
+    command: --web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml
+    links:
+      - kafka-connect
+    networks:
+      - kafka-network
+
+  grafana:
+    build:
+      context: ./grafana
+    ports:
+      - 3000:3000
     networks:
       - kafka-network
 
