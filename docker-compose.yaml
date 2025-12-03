@@ -139,5 +139,25 @@ services:
     networks:
       - kafka-network
 
+  consumer-app:
+    image: 'consumer-app:latest'
+    container_name: consumer-app
+    build:
+      context: ./consumer-app
+    restart: on-failure:5
+    depends_on:
+      - zookeeper
+      - kafka1
+      - kafka-connect
+      - postgres
+      - schema-registry
+    environment:
+      BOOTSTRAP_SERVERS: kafka1:9092
+      SERVER_PORT: 8585
+    ports:
+      - "8085:8085"
+    networks:
+      - kafka-network
+
 networks:
   kafka-network:
